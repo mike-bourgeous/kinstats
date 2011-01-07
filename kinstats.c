@@ -170,7 +170,7 @@ int main()
 		return -1;
 	}
 
-	freenect_set_tilt_degs(kn_dev, 15);
+	freenect_set_tilt_degs(kn_dev, -5);
 	freenect_set_led(kn_dev, LED_GREEN);
 	freenect_set_depth_callback(kn_dev, depth);
 	freenect_set_depth_format(kn_dev, FREENECT_DEPTH_11BIT);
