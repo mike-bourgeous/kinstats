@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <signal.h>
+#include <math.h>
 
 #include <libfreenect/libfreenect.h>
 
@@ -33,6 +34,9 @@
 // Convert pixel number to coordinates
 #define PX_TO_X(pix) (pix % FREENECT_FRAME_W)
 #define PX_TO_Y(pix) (pix / FREENECT_FRAME_W)
+
+// Depth gamma look-up table
+static float depth_lut[2048];
 
 void repeat_char(int c, int count)
 {
@@ -93,17 +97,19 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 			min, PX_TO_X(min_pix), PX_TO_Y(min_pix),
 			max, PX_TO_X(max_pix), PX_TO_Y(max_pix));
 
-	INFO_OUT("Out of range: %d%% mean: %f, median: %d\n",
-			oor_count * 100 / FREENECT_FRAME_PIX, 
-			(double)total / (double)FREENECT_FRAME_PIX, median);
+	INFO_OUT("Out of range: %d%% mean: %f (%f), median: %d (%f)\n",
+			oor_count * 100 / FREENECT_FRAME_PIX,
+			(double)total / (double)FREENECT_FRAME_PIX,
+			depth_lut[(int)((double)total / (double)FREENECT_FRAME_PIX)],
+			median, depth_lut[median]);
 
 	for(i = 0; i < SM_HIST_SIZE; i++) {
-		printf("%4d: ", i * 2048 / SM_HIST_SIZE);
+		printf("%*.4f: ", 9, depth_lut[i * 2048 / SM_HIST_SIZE]);
 		repeat_char(i == median * SM_HIST_SIZE / 2048 ? '*' : '-',
 				small_histogram[i] * 96 / FREENECT_FRAME_PIX);
 		printf("\n");
 	}
-	printf(" Out: ");
+	printf("%*s: ", 9, "Out");
 	repeat_char('-', oor_count * 96 / FREENECT_FRAME_PIX);
 	printf("\n");
 }
@@ -117,6 +123,17 @@ void intr(int signum)
 	done = 1;
 }
 
+// http://groups.google.com/group/openkinect/browse_thread/thread/31351846fd33c78/e98a94ac605b9f21#e98a94ac605b9f21
+void init_lut()
+{
+	int i;
+
+	for(i = 0; i < 2048; i++) {
+		depth_lut[i] = 0.1236 * tanf(i / 2842.5 + 1.1863);
+		printf("%d: %f\n", i, depth_lut[i]);
+	}
+}
+
 int main()
 {
 	freenect_context *kn;
@@ -127,6 +144,8 @@ int main()
 		ERROR_OUT("Error setting signal handlers\n");
 		return -1;
 	}
+
+	init_lut();
 
 	if(freenect_init(&kn, NULL) < 0) {
 		ERROR_OUT("libfreenect init failed.\n");
