@@ -35,8 +35,9 @@
 #define PX_TO_X(pix) (pix % FREENECT_FRAME_W)
 #define PX_TO_Y(pix) (pix / FREENECT_FRAME_W)
 
-// Depth gamma look-up table
+// Depth gamma look-up table (I wish freenect provided a user data struct for callbacks)
 static float depth_lut[2048];
+static int out_of_range = 0;
 
 void repeat_char(int c, int count)
 {
@@ -112,6 +113,9 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 	printf("%*s: ", 9, "Out");
 	repeat_char('-', oor_count * 96 / FREENECT_FRAME_PIX);
 	printf("\n");
+
+	// Make LED red if more than 35% of the image is out of range
+	out_of_range = oor_count > FREENECT_FRAME_PIX * 35 / 100;
 }
 
 
@@ -165,14 +169,18 @@ int main()
 	}
 
 	freenect_set_tilt_degs(kn_dev, 15);
-	freenect_set_led(kn_dev, LED_BLINK_GREEN);
+	freenect_set_led(kn_dev, LED_GREEN);
 	freenect_set_depth_callback(kn_dev, depth);
 	freenect_set_depth_format(kn_dev, FREENECT_DEPTH_11BIT);
 
 	freenect_start_depth(kn_dev);
 
+	int last_oor = out_of_range;
 	while(!done && freenect_process_events(kn) >= 0) {
-
+		if(last_oor != out_of_range) {
+			freenect_set_led(kn_dev, out_of_range ? LED_BLINK_RED_YELLOW : LED_GREEN);
+			last_oor = out_of_range;
+		}
 	}
 
 	freenect_stop_depth(kn_dev);
