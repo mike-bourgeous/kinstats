@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <signal.h>
+#include <unistd.h>
 #include <math.h>
 
 #include <libfreenect/libfreenect.h>
@@ -39,6 +40,14 @@
 static float depth_lut[2048];
 static int out_of_range = 0;
 
+static enum {
+	VERBOSE,
+	MEDIAN,
+	MEDIAN_SCALED,
+	AVERAGE,
+	AVERAGE_SCALED,
+} disp_mode = VERBOSE;
+
 void repeat_char(int c, int count)
 {
 	int i;
@@ -56,6 +65,7 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 	int total = 0;
 	int oor_count = 0; // Out of range count
 	int median;
+	float avg;
 	int i;
 
 	memset(big_histogram, 0, sizeof(big_histogram));
@@ -90,29 +100,53 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 	}
 	median = i;
 
-	// Clear the screen
-	printf("\e[H\e[2J");
+	avg = (double)total / (double)(FREENECT_FRAME_PIX - oor_count);
 
-	INFO_OUT("Time: %u, min: %hu (%d, %d), max: %hu (%d, %d)\n",
-			timestamp,
-			min, PX_TO_X(min_pix), PX_TO_Y(min_pix),
-			max, PX_TO_X(max_pix), PX_TO_Y(max_pix));
+	switch(disp_mode) {
+		case VERBOSE:
+			// Clear the screen
+			printf("\e[H\e[2J");
 
-	INFO_OUT("Out of range: %d%% mean: %f (%f), median: %d (%f)\n",
-			oor_count * 100 / FREENECT_FRAME_PIX,
-			(double)total / (double)FREENECT_FRAME_PIX,
-			depth_lut[(int)((double)total / (double)FREENECT_FRAME_PIX)],
-			median, depth_lut[median]);
+			INFO_OUT("Time: %u, min: %hu (%d, %d), max: %hu (%d, %d)\n",
+					timestamp,
+					min, PX_TO_X(min_pix), PX_TO_Y(min_pix),
+					max, PX_TO_X(max_pix), PX_TO_Y(max_pix));
 
-	for(i = 0; i < SM_HIST_SIZE; i++) {
-		printf("%*.4f: ", 9, depth_lut[i * 2048 / SM_HIST_SIZE]);
-		repeat_char(i == median * SM_HIST_SIZE / 2048 ? '*' : '-',
-				small_histogram[i] * 96 / FREENECT_FRAME_PIX);
-		printf("\n");
+			INFO_OUT("Out of range: %d%% mean: %f (%f), median: %d (%f)\n",
+					oor_count * 100 / FREENECT_FRAME_PIX,
+					avg, depth_lut[(int)avg],
+					median, depth_lut[median]);
+
+			for(i = 0; i < SM_HIST_SIZE; i++) {
+				printf("%*.4f: ", 9, depth_lut[i * 2048 / SM_HIST_SIZE]);
+				repeat_char(i == median * SM_HIST_SIZE / 2048 ? '*' : '-',
+						small_histogram[i] * 96 / FREENECT_FRAME_PIX);
+				printf("\n");
+			}
+			printf("%*s: ", 9, "Out");
+			repeat_char('-', oor_count * 96 / FREENECT_FRAME_PIX);
+			printf("\n");
+			
+			break;
+
+		case MEDIAN:
+			printf("%d\n", median);
+			break;
+
+		case MEDIAN_SCALED:
+			printf("%f\n", depth_lut[median]);
+			break;
+
+		case AVERAGE:
+			printf("%d\n", (int)avg);
+			break;
+
+		case AVERAGE_SCALED:
+			printf("%f\n", depth_lut[(int)avg]);
+			break;
 	}
-	printf("%*s: ", 9, "Out");
-	repeat_char('-', oor_count * 96 / FREENECT_FRAME_PIX);
-	printf("\n");
+
+	fflush(stdout);
 
 	// Make LED red if more than 35% of the image is out of range
 	out_of_range = oor_count > FREENECT_FRAME_PIX * 35 / 100;
@@ -136,14 +170,45 @@ void init_lut()
 
 	for(i = 0; i < 2048; i++) {
 		depth_lut[i] = 0.1236 * tanf(i / 2842.5 + 1.1863);
-		printf("%d: %f\n", i, depth_lut[i]);
 	}
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+	int opt;
+
 	freenect_context *kn;
 	freenect_device *kn_dev;
+
+	while((opt = getopt(argc, argv, "mMaAv")) != -1) {
+		switch(opt) {
+			case 'm':
+				// Median
+				disp_mode = MEDIAN;
+				break;
+			case 'M':
+				// Scaled median
+				disp_mode = MEDIAN_SCALED;
+				break;
+			case 'a':
+				// Mean
+				disp_mode = AVERAGE;
+				break;
+			case 'A':
+				// Scaled mean
+				disp_mode = AVERAGE_SCALED;
+				break;
+			default:
+				fprintf(stderr, "Usage: %s -[mMaAv]\n", argv[0]);
+				fprintf(stderr, "Use one of:\n");
+				fprintf(stderr, "\tm - median\n");
+				fprintf(stderr, "\tM - scaled median\n");
+				fprintf(stderr, "\ta - mean\n");
+				fprintf(stderr, "\tA - scaled mean\n");
+				fprintf(stderr, "\tv - verbose (default)\n");
+				return -1;
+		}
+	}
 
 	if(signal(SIGINT, intr) == SIG_ERR ||
 			signal(SIGTERM, intr) == SIG_ERR) {
@@ -192,3 +257,4 @@ int main()
 
 	return 0;
 }
+
