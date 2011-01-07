@@ -125,6 +125,8 @@ void intr(int signum)
 {
 	INFO_OUT("Exiting due to signal %d (%s)\n", signum, strsignal(signum));
 	done = 1;
+
+	signal(signum, exit);
 }
 
 // http://groups.google.com/group/openkinect/browse_thread/thread/31351846fd33c78/e98a94ac605b9f21#e98a94ac605b9f21
