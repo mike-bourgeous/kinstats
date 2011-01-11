@@ -198,6 +198,9 @@ int main(int argc, char *argv[])
 				// Scaled mean
 				disp_mode = AVERAGE_SCALED;
 				break;
+			case 'v':
+				disp_mode = VERBOSE;
+				break;
 			default:
 				fprintf(stderr, "Usage: %s -[mMaAv]\n", argv[0]);
 				fprintf(stderr, "Use one of:\n");
