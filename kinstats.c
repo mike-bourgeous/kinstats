@@ -148,7 +148,8 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 
 	fflush(stdout);
 
-	// Make LED red if more than 35% of the image is out of range
+	// Make LED red if more than 35% of the image is out of range (can't
+	// set LED in callback for some reason)
 	out_of_range = oor_count > FREENECT_FRAME_PIX * 35 / 100;
 }
 
