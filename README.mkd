@@ -1,7 +1,6 @@
 kinstats
 ========
-Part of a collection of Kinect hacks and tools by Mike Bourgeous
-----------------------------------------------------------------
+Part of a collection of Kinect hacks and tools by Mike Bourgeous.
 
 kinstats displays some very basic statistics about the data coming from a Kinect
 sensor's depth data, including the minimum, mean, median, and maximum, the
