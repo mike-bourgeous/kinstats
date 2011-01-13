@@ -1,6 +1,6 @@
 #!/bin/bash
 # Controls lights based on average distance of scene from Kinect camera.
-# Object 13 parameter 4 is the light value
+# Object 13 parameter 4 is the light value on a custom automation controller.
 # Created Jan. 7, 2011 by Mike Bourgeous
 
 ./kinstats -a | \
