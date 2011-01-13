@@ -1,0 +1,71 @@
+kinstats
+========
+Part of a collection of Kinect hacks and tools by Mike Bourgeous
+----------------------------------------------------------------
+
+kinstats displays some very basic statistics about the data coming from a Kinect
+sensor's depth data, including the minimum, mean, median, and maximum, the
+percentage of shadowed or out-of-bound depth pixels, etc.  kinstats can also
+repeatedly output a single statistic, intended for piping into other programs.
+
+Requirements
+------------
+You will need libfreenect from the OpenKinect project to compile kinstats.
+
+Compiling and Running
+---------------------
+    $ make
+    $ ./kinstats
+
+Command-line Options
+--------------------
+    Usage: ./kinstats -[mMaAv]
+    Use one of:
+    	m - median
+    	M - scaled median
+    	a - mean
+    	A - scaled mean
+    	v - verbose (default)
+
+Sample Output
+-------------
+    kinstats.c:113: depth():	Time: 3523477067, min: 320 (177, 37), max: 1046 (407, 79)
+    kinstats.c:118: depth():	Out of range: 21% mean: 783.504150 (1.129089), median: 820 (1.283301)
+       0.3055: 
+       0.3264: 
+       0.3500: 
+       0.3768: 
+       0.4076: 
+       0.4433: ----
+       0.4853: --------
+       0.5354: ---
+       0.5963: 
+       0.6721: 
+       0.7691: 
+       0.8977: --------------
+       1.0765: *******
+       1.3427: --
+       1.7812: -----------
+       2.6411: ---------------
+       5.0959: -----
+      71.2519: 
+      -5.9470: 
+      -2.8530: 
+      -1.8754: 
+      -1.3957: 
+      -1.1105: 
+      -0.9213: 
+      -0.7865: 
+      -0.6855: 
+      -0.6069: 
+      -0.5440: 
+      -0.4924: 
+      -0.4493: 
+      -0.4127: 
+      -0.3813: 
+          Out: --------------------
+
+Copyright
+---------
+(C)2011 Mike Bourgeous, licensed under GPLv2 or later
+
