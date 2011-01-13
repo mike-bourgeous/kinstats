@@ -25,8 +25,6 @@
 	fprintf(stderr, "\e[0m");\
 }
 
-#define ARRAY_SIZE(array) (sizeof((array)) / sizeof((array)[0]))
-
 
 #define SM_HIST_SIZE	32
 
