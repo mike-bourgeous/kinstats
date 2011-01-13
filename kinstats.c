@@ -2,6 +2,7 @@
  * Test Kinect/libfreenect program to display some depth stats.
  * Created Jan. 6, 2011
  * (C)2011 Mike Bourgeous
+ * Distributed with no warranty under GPLv2 or later.
  */
 #include <stdio.h>
 #include <stdlib.h>
