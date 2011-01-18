@@ -100,15 +100,15 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 
 	switch(disp_mode) {
 		case VERBOSE:
-			// Clear the screen
-			printf("\e[H\e[2J");
+			// Move to the top of the screen
+			printf("\e[H");
 
-			INFO_OUT("Time: %u, min: %hu (%d, %d), max: %hu (%d, %d)\n",
+			INFO_OUT("Time: %u, min: %hu (%d, %d), max: %hu (%d, %d)\e[K\n",
 					timestamp,
 					min, PX_TO_X(min_pix), PX_TO_Y(min_pix),
 					max, PX_TO_X(max_pix), PX_TO_Y(max_pix));
 
-			INFO_OUT("Out of range: %d%% mean: %f (%f), median: %d (%f)\n",
+			INFO_OUT("Out of range: %d%% mean: %f (%f), median: %d (%f)\e[K\n",
 					oor_count * 100 / FREENECT_FRAME_PIX,
 					avg, depth_lut[(int)avg],
 					median, depth_lut[median]);
@@ -117,11 +117,11 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 				printf("%*.4f: ", 9, depth_lut[i * 2048 / SM_HIST_SIZE]);
 				repeat_char(i == median * SM_HIST_SIZE / 2048 ? '*' : '-',
 						small_histogram[i] * 96 / FREENECT_FRAME_PIX);
-				printf("\n");
+				printf("\e[K\n");
 			}
 			printf("%*s: ", 9, "Out");
 			repeat_char('-', oor_count * 96 / FREENECT_FRAME_PIX);
-			printf("\n");
+			printf("\e[K\n");
 			
 			break;
 
@@ -142,6 +142,7 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 			break;
 	}
 
+	printf("\e[K");
 	fflush(stdout);
 
 	// Make LED red if more than 35% of the image is out of range (can't
@@ -241,6 +242,8 @@ int main(int argc, char *argv[])
 	freenect_set_depth_format(kn_dev, FREENECT_DEPTH_11BIT);
 
 	freenect_start_depth(kn_dev);
+
+	printf("\e[H\e[2J");
 
 	int last_oor = out_of_range;
 	while(!done && freenect_process_events(kn) >= 0) {
