@@ -32,17 +32,24 @@
 #define PX_TO_X(pix) (pix % FREENECT_FRAME_W)
 #define PX_TO_Y(pix) (pix / FREENECT_FRAME_W)
 
-// Depth gamma look-up table (I wish freenect provided a user data struct for callbacks)
-static float depth_lut[2048];
-static int out_of_range = 0;
+struct kinstats_info {
+	// Depth gamma look-up table
+	float depth_lut[2048];
 
-static enum {
-	VERBOSE,
-	MEDIAN,
-	MEDIAN_SCALED,
-	AVERAGE,
-	AVERAGE_SCALED,
-} disp_mode = VERBOSE;
+	enum {
+		VERBOSE,
+		MEDIAN,
+		MEDIAN_SCALED,
+		AVERAGE,
+		AVERAGE_SCALED,
+	} disp_mode;
+
+	// Whether >=n% of pixels are out of range
+	unsigned int out_of_range:1;
+
+	// Whether to end the main loop
+	unsigned int done:1;
+};
 
 void repeat_char(int c, int count)
 {
@@ -54,6 +61,7 @@ void repeat_char(int c, int count)
 
 void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 {
+	struct kinstats_info *data = freenect_get_user(kn_dev);
 	uint16_t *buf = (uint16_t *)depthbuf;
 	int big_histogram[2048], small_histogram[SM_HIST_SIZE];
 	uint16_t min, max;
@@ -98,7 +106,7 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 
 	avg = (double)total / (double)(FREENECT_FRAME_PIX - oor_count);
 
-	switch(disp_mode) {
+	switch(data->disp_mode) {
 		case VERBOSE:
 			// Move to the top of the screen
 			printf("\e[H");
@@ -110,11 +118,11 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 
 			INFO_OUT("Out of range: %d%% mean: %f (%f), median: %d (%f)\e[K\n",
 					oor_count * 100 / FREENECT_FRAME_PIX,
-					avg, depth_lut[(int)avg],
-					median, depth_lut[median]);
+					avg, data->depth_lut[(int)avg],
+					median, data->depth_lut[median]);
 
 			for(i = 0; i < SM_HIST_SIZE; i++) {
-				printf("%*.4f: ", 9, depth_lut[i * 2048 / SM_HIST_SIZE]);
+				printf("%*.4f: ", 9, data->depth_lut[i * 2048 / SM_HIST_SIZE]);
 				repeat_char(i == median * SM_HIST_SIZE / 2048 ? '*' : '-',
 						small_histogram[i] * 96 / FREENECT_FRAME_PIX);
 				printf("\e[K\n");
@@ -130,7 +138,7 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 			break;
 
 		case MEDIAN_SCALED:
-			printf("%f\n", depth_lut[median]);
+			printf("%f\n", data->depth_lut[median]);
 			break;
 
 		case AVERAGE:
@@ -138,7 +146,7 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 			break;
 
 		case AVERAGE_SCALED:
-			printf("%f\n", depth_lut[(int)avg]);
+			printf("%f\n", data->depth_lut[(int)avg]);
 			break;
 	}
 
@@ -147,22 +155,22 @@ void depth(freenect_device *kn_dev, void *depthbuf, uint32_t timestamp)
 
 	// Make LED red if more than 35% of the image is out of range (can't
 	// set LED in callback for some reason)
-	out_of_range = oor_count > FREENECT_FRAME_PIX * 35 / 100;
+	data->out_of_range = oor_count > FREENECT_FRAME_PIX * 35 / 100;
 }
 
-
-static int done = 0;
+// Is there a less-global way of passing data to/from a signal handler?
+static struct kinstats_info *sigdata;
 
 void intr(int signum)
 {
 	INFO_OUT("Exiting due to signal %d (%s)\n", signum, strsignal(signum));
-	done = 1;
+	sigdata->done = 1;
 
 	signal(signum, exit);
 }
 
 // http://groups.google.com/group/openkinect/browse_thread/thread/31351846fd33c78/e98a94ac605b9f21#e98a94ac605b9f21
-void init_lut()
+void init_lut(float depth_lut[])
 {
 	int i;
 
@@ -173,31 +181,34 @@ void init_lut()
 
 int main(int argc, char *argv[])
 {
-	int opt;
-
+	struct kinstats_info data;
 	freenect_context *kn;
 	freenect_device *kn_dev;
+	int opt;
+
+	memset(&data, 0, sizeof(struct kinstats_info));
+	sigdata = &data;
 
 	while((opt = getopt(argc, argv, "mMaAv")) != -1) {
 		switch(opt) {
 			case 'm':
 				// Median
-				disp_mode = MEDIAN;
+				data.disp_mode = MEDIAN;
 				break;
 			case 'M':
 				// Scaled median
-				disp_mode = MEDIAN_SCALED;
+				data.disp_mode = MEDIAN_SCALED;
 				break;
 			case 'a':
 				// Mean
-				disp_mode = AVERAGE;
+				data.disp_mode = AVERAGE;
 				break;
 			case 'A':
 				// Scaled mean
-				disp_mode = AVERAGE_SCALED;
+				data.disp_mode = AVERAGE_SCALED;
 				break;
 			case 'v':
-				disp_mode = VERBOSE;
+				data.disp_mode = VERBOSE;
 				break;
 			default:
 				fprintf(stderr, "Usage: %s -[mMaAv]\n", argv[0]);
@@ -217,7 +228,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	init_lut();
+	init_lut(data.depth_lut);
 
 	if(freenect_init(&kn, NULL) < 0) {
 		ERROR_OUT("libfreenect init failed.\n");
@@ -236,6 +247,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
+	freenect_set_user(kn_dev, &data);
 	freenect_set_tilt_degs(kn_dev, -5);
 	freenect_set_led(kn_dev, LED_GREEN);
 	freenect_set_depth_callback(kn_dev, depth);
@@ -245,11 +257,12 @@ int main(int argc, char *argv[])
 
 	printf("\e[H\e[2J");
 
-	int last_oor = out_of_range;
-	while(!done && freenect_process_events(kn) >= 0) {
-		if(last_oor != out_of_range) {
-			freenect_set_led(kn_dev, out_of_range ? LED_BLINK_RED_YELLOW : LED_GREEN);
-			last_oor = out_of_range;
+	int last_oor = data.out_of_range;
+	while(!data.done && freenect_process_events(kn) >= 0) {
+		if(last_oor != data.out_of_range) {
+			freenect_set_led(kn_dev, data.out_of_range ?
+					LED_BLINK_RED_YELLOW : LED_GREEN);
+			last_oor = data.out_of_range;
 		}
 	}
 
